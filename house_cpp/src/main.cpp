@@ -18,6 +18,7 @@
 
 #include "xtensor-blas/xlinalg.hpp"
 
+
 namespace py = pybind11;
 
 using namespace std::complex_literals;
@@ -29,7 +30,7 @@ xt::pytensor<std::complex<double>, 2> test(xt::pytensor<std::complex<double>, 2>
   auto m = s[0];
   auto n = s[1];
 
-  xt::pytensor<std::complex<double>, 2> Q = xt::eye(m);
+  xt::pytensor<std::complex<double>, 2> Q(W);
 
   for(int i = 0; i < n; ++i) {
     for(int k = n-1; k >= 0; --k) {
@@ -40,6 +41,9 @@ xt::pytensor<std::complex<double>, 2> test(xt::pytensor<std::complex<double>, 2>
 }
 
 
+xt::xtensor<std::complex<double>, 1> angle(xt::xtensor<std::complex<double>, 1> complex_number){
+  return xt::atan2(xt::imag(complex_number), xt::real(complex_number));
+}
 
 
 xt::pytensor<std::complex<double>, 2> house(xt::pytensor<std::complex<double>, 2>& A)
@@ -48,21 +52,28 @@ xt::pytensor<std::complex<double>, 2> house(xt::pytensor<std::complex<double>, 2
   auto m = s[0];
   auto n = s[1];
 
-  xt::pytensor<std::complex<double>, 2> R = xt::copy(A);
+  xt::pytensor<std::complex<double>, 2> R(A);
   xt::pytensor<std::complex<double>, 2> W = xt::zeros<std::complex<double>>({m, n});
 
-  // for k in range(n):
-  //     v_k = np.copy(R[k:, k])
-  //     sgn = np.sign(v_k[0])
-  //     if  sgn == 0: sgn = 1
-  //     v_k[0] += np.exp(1j*np.angle(v_k[0])) * sgn * np.linalg.norm(np.abs(v_k))
-  //     v_k /= np.linalg.norm(v_k)
-  //     W[k:, k] = v_k
-  //     R[k:, k:] -= 2 * np.outer(v_k, np.dot(np.conjugate(v_k).T, R[k:, k:]))          # 28 ms
-  //     #R[k:, k:] -= 2 * np.dot(np.outer(v_k, np.conjugate(v_k).T), R[k:, k:])  # slower 31.5 ms
-  // if m > n:
-  //     R = np.copy(R[:n,:])
-  return R; //, R
+  for(int k=0; k<n; ++k) {
+    xt::xtensor<std::complex<double>, 1> v_k(xt::view(R, xt::range(k, m), k));
+    // How to get the number/sign??
+    std::complex<float> sgn = xt::sign(xt::view(v_k, 0));
+    if(sgn == 0){
+      sgn = 1;
+    }
+    xt::view(v_k, 0) += xt::exp(1i*angle(xt::view(v_k, 0))) * sgn * xt::linalg::norm(v_k);
+    v_k /= xt::linalg::norm(v_k);
+    xt::view(W, xt::range(k, m), k) = v_k;
+    // no matching function for call to 'outer'
+    xt::view(R, xt::range(k, n), xt::range(k, n)) -= (std::complex<double>)2 * xt::linalg::outer(v_k, xt::linalg::vdot(v_k, xt::view(R, xt::range(k, n), xt::range(k, n))));
+  }
+  if(m>n){
+    R = xt::view(R, xt::range(0, n), xt::all());
+  }
+
+  // How to return W, R ??
+  return W; //, R
 }
 
 
@@ -74,6 +85,10 @@ xt::pytensor<std::complex<double>, 2> formQ(xt::pytensor<std::complex<double>, 2
   auto s = W.shape();
   auto m = s[0];
   auto n = s[1];
+
+  if(m<n){
+    //throw exception("m (rows) must be greater or equal than n (columns)");
+  }
 
   xt::pytensor<std::complex<double>, 2> Q = xt::eye(m);
 
