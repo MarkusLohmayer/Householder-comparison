@@ -66,7 +66,8 @@ xt::pytensor<std::complex<double>, 2> house(xt::pytensor<std::complex<double>, 2
     v_k /= xt::linalg::norm(v_k);
     xt::view(W, xt::range(k, m), k) = v_k;
     // no matching function for call to 'outer'
-    xt::view(R, xt::range(k, n), xt::range(k, n)) -= (std::complex<double>)2 * xt::linalg::outer(v_k, xt::linalg::vdot(v_k, xt::view(R, xt::range(k, n), xt::range(k, n))));
+    auto inner = xt::linalg::vdot(v_k, xt::view(R, xt::range(k, n), xt::range(k, n)));
+    xt::view(R, xt::range(k, n), xt::range(k, n)) -= (std::complex<double>)2 * xt::linalg::outer(v_k, inner);
   }
   if(m>n){
     R = xt::view(R, xt::range(0, n), xt::all());
